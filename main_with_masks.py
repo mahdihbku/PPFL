@@ -47,15 +47,14 @@ rand_high = +100.0
 # num_clients= 20
 # num_rounds = 50
 # epochs = 20
-data_splits = 23
-num_participants = 5
 num_clients= 5
+data_splits = num_clients
+num_participants = num_clients
 num_rounds = 3
-epochs = 5
+epochs = 3
 LR=0.001
 MOMENTUM=0.9
 BATCH_SIZE = 32
-loss = 0
 
 torch.backends.cudnn.benchmark=True
 
@@ -81,7 +80,9 @@ train_dataset = ProcessDataset(training_file, transform=transforms.ToTensor())
 valid_dataset = ProcessDataset(validation_file, transform=transforms.ToTensor())
 test_dataset = ProcessDataset(testing_file, transform=transforms.ToTensor())
 
-traindata_split = torch.utils.data.random_split(train_dataset, [int(len(train_dataset) /  data_splits) for _ in range(data_splits)])
+dataset_splits_lengths = [int(len(train_dataset)/data_splits) for _ in range(data_splits)]
+dataset_splits_lengths[-1] = len(train_dataset) - sum(dataset_splits_lengths[:-1])
+traindata_split = torch.utils.data.random_split(train_dataset, dataset_splits_lengths)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -120,44 +121,46 @@ for r in range(num_rounds):
     for i in tqdm(range(num_participants)):
         train_(epochs, clients_models[participant_index[i]], criterion1, opt[participant_index[i]], train_loaders[participant_index[i]], valid_loader)
 
-    """Generating the seeds that will be used for masking"""
-    seeds = [random.getrandbits(RAND_BIT_SIZE) for i in range(num_participants)]
-
     print("Aggregating without masking...")
     server_aggregate(global_model, clients_models)
     acc, loss = test_(global_model, criterion, test_loader)
+    losses_testing.append(loss)
+    acc_testing.append(acc)
 
-    print("Masking clients_models...")
-    for i in range(num_participants):
-        mask_model(seeds[i], clients_models[i], rand_high, rand_low)
-    print("******* mask has been added")
-    print("Central unmasking clients_models...")
-    for i in range(num_participants):
-        unmask_model(seeds[i], clients_models[i], rand_high, rand_low)
-    print("******* mask has been removed")
-    server_aggregate(global_model, clients_models)
-    acc, loss = test_(global_model, criterion, test_loader)
+    """Generating the seeds that will be used for masking (One seed per participant)"""
+    seeds = [random.getrandbits(RAND_BIT_SIZE) for i in range(num_participants)]
 
-    print("Central with masks list masking clients_models...")
-    for i in range(num_participants):
-        mask_model(seeds[i], clients_models[i], rand_high, rand_low)
-    print("******* mask has been added")
-    print("Central with masks unmasking clients_models...")
-    masks_shapes = [parm.size() for parm in clients_models[0].parameters()]
-    for i in range(num_participants):
-        client_masks = generate_masks_from_seed(seeds[i], masks_shapes, rand_high, rand_low)
-        for parm, mask in zip(clients_models[i].parameters(), client_masks):
-            parm.data -= mask
-    print("******* mask has been removed")
-    server_aggregate(global_model, clients_models)
-    acc, loss = test_(global_model, criterion, test_loader)
+    # print("Masking clients_models...")
+    # for i in range(num_participants):
+    #     mask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    # print("******* mask has been added")
+    # print("Central unmasking clients_models...")
+    # for i in range(num_participants):
+    #     unmask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    # print("******* mask has been removed")
+    # server_aggregate(global_model, clients_models)
+    # acc, loss = test_(global_model, criterion, test_loader)
+
+    # print("Central with masks list masking clients_models...")
+    # for i in range(num_participants):
+    #     mask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    # print("******* mask has been added")
+    # print("Central with masks unmasking clients_models...")
+    # masks_shapes = [parm.size() for parm in clients_models[0].parameters()]
+    # for i in range(num_participants):
+    #     client_masks = generate_masks_from_seed(seeds[i], masks_shapes, rand_high, rand_low)
+    #     for parm, mask in zip(clients_models[i].parameters(), client_masks):
+    #         parm.data -= mask
+    # print("******* mask has been removed")
+    # server_aggregate(global_model, clients_models)
+    # acc, loss = test_(global_model, criterion, test_loader)
 
     print("Distributed masking clients_models...")
+    masks_shapes = [parm.size() for parm in clients_models[0].parameters()]
     for i in range(num_participants):
         mask_model(seeds[i], clients_models[i], rand_high, rand_low)
     print("******* mask has been added")
     print("Distributed unmasking clients_models...")
-    # Compute global mask
     clients_masks = [generate_masks_from_seed(seeds[i], masks_shapes, rand_high, rand_low) for i in range(num_participants)]
     global_mask = sum_list_masks(clients_masks)
     server_aggregate_masked(global_model, clients_models, global_mask)
@@ -165,5 +168,3 @@ for r in range(num_rounds):
     acc, loss = test_(global_model, criterion, test_loader)
 
     print(f'##########{r+1}-th round')
-    # losses_testing.append(loss)
-    # acc_testing.append(acc)
