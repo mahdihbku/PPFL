@@ -33,7 +33,7 @@ while True:
     print("Waiting for clients to send their random seeds...")
     seeds = []
     for i in range(num_participants):   # TODO should run in parallel...
-        msg0 = recv_msg(partcicpants[i], 'Messgage from client ')  
+        msg0 = recv_msg(partcicpants[i], 'Messgage from client ')
         seeds.append(msg0[1])
     print("All seeds received from clients")
     masks_shapes = [parm.size() for parm in basic_model.parameters()]

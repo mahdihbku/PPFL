@@ -5,20 +5,6 @@ Created on Tue Mar 16 13:02:29 2021
 @author: abdullatif
 """
 
-# -*- coding: utf-8 -*-
-"""
-Created on  Dec  3
-
-@author: abdullatif 
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Dec  3 00:27:31 2020
-
-@author: abdullatif
-"""
-
 # import here
 import os
 import PIL
@@ -41,6 +27,7 @@ from models import *
 from tqdm import tqdm
 import sys
 from FL_funcs import *
+from PP_funcs import *
 from utils import *
 
 import socket
@@ -50,10 +37,8 @@ if (len(sys.argv) != 2):
     raise "You should give the client index in the command line as: python PPclient.py INDEX"
 MY_CLIENT_INDEX = sys.argv[1]
 
-soc = socket.socket()
-print("Socket is created.")
-
-soc.connect((SERVER_IP, SERVER_PORT))
+server_soc = socket.socket()
+server_soc.connect((SERVER_IP, SERVER_PORT_FOR_CLIENT))
 print("Connected to the server.")
 
 torch.backends.cudnn.benchmark=True
@@ -95,23 +80,29 @@ my_model = BasicNet().to(device)
 criterion = nn.CrossEntropyLoss()
 opt =optim.SGD(my_model.parameters(), lr=LR, momentum=MOMENTUM) 
 
-losses_training = []
-losses_testing = []
-acc_training = []
-acc_testing = []
-
-"""Keep local model synchrounized with global model"""
 round = 1
-models = []
 while True:
     print("Waiting for the global model from the server...")
-    MSG = recv_msg(soc, 'Messgage from server ') 
+    msg0 = recv_msg(server_soc, 'Messgage from server ') 
+    my_model.load_state_dict(msg0[1].state_dict())
+    is_last_round = msg0[2]
+    if (round == 1):
+        committee_list = msg0[3]
     print("########## Round {}".format(round))
-    my_model.load_state_dict(MSG[1].state_dict())
-    is_last_round = MSG[2]
+    for cm in committee_list:
+        ip_address, port = cm
+        cm_soc = socket.socket()
+        cm_soc.connect((ip_address, COMMITTEE_PORT))    # TODO COMMITTEE_PORT or port ?!?!?!
     train_(epochs, my_model, criterion, opt, train_loader, valid_loader)
-    msg = ['Msg_from_client', my_model, is_last_round]
-    send_msg(soc, msg)
+    seed = random.getrandbits(RAND_BIT_SIZE)
+    mask_model(seed, my_model, rand_high, rand_low)
+    send_msg(server_soc, ['Msg_from_client', my_model, is_last_round])
+    print("Masked local model sent to server")
+    for cm in committee_list:
+        send_msg(cm_soc, ['Msg_from_client', seed])
+        cm_soc.close()
+        print("Random seed sent to committee member {}".format(cm))
+    print("Seed sent to committee members")
     round += 1
     if is_last_round:
         break
