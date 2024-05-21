@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on  Dec  3
-
-@author: abdullatif 
-"""
-
-# -*- coding: utf-8 -*-
-"""
 Created on Thu Dec  3 00:40:56 2020
 
 @author: abdullatif

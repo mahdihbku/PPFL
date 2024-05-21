@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on  Dec  3
-
-@author: abdullatif 
-"""
-
-# -*- coding: utf-8 -*-
-"""
 Created on Thu Dec  3 00:27:31 2020
 
 @author: abdullatif
@@ -32,7 +25,8 @@ from Data_process import *
 from models import *
 from tqdm import tqdm
 from FL_funcs import *
-from PP_funcs import *
+from PPfuncs import *
+from utils import *
 
 training_file = "data/train.p"
 validation_file = "data/valid.p"
@@ -47,14 +41,16 @@ rand_high = +100.0
 # num_clients= 20
 # num_rounds = 50
 # epochs = 20
-num_clients= 5
+num_clients = 3
 data_splits = num_clients
 num_participants = num_clients
+committee_size = 3
 num_rounds = 3
 epochs = 3
-LR=0.001
-MOMENTUM=0.9
+LR = 0.001
+MOMENTUM = 0.9
 BATCH_SIZE = 32
+NUM_SPLITS = 2
 
 torch.backends.cudnn.benchmark=True
 
@@ -132,39 +128,91 @@ for r in range(num_rounds):
 
     # print("Masking clients_models...")
     # for i in range(num_participants):
-    #     mask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    #     mask_model(seeds[i], clients_models[i], rand_low, rand_high)
     # print("******* mask has been added")
     # print("Central unmasking clients_models...")
     # for i in range(num_participants):
-    #     unmask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    #     unmask_model(seeds[i], clients_models[i], rand_low, rand_high)
     # print("******* mask has been removed")
     # server_aggregate(global_model, clients_models)
     # acc, loss = test_(global_model, criterion, test_loader)
 
     # print("Central with masks list masking clients_models...")
     # for i in range(num_participants):
-    #     mask_model(seeds[i], clients_models[i], rand_high, rand_low)
+    #     mask_model(seeds[i], clients_models[i], rand_low, rand_high)
     # print("******* mask has been added")
     # print("Central with masks unmasking clients_models...")
     # masks_shapes = [parm.size() for parm in clients_models[0].parameters()]
     # for i in range(num_participants):
-    #     client_masks = generate_masks_from_seed(seeds[i], masks_shapes, rand_high, rand_low)
+    #     client_masks = generate_masks_from_seed(seeds[i], masks_shapes, rand_low, rand_high)
     #     for parm, mask in zip(clients_models[i].parameters(), client_masks):
     #         parm.data -= mask
     # print("******* mask has been removed")
     # server_aggregate(global_model, clients_models)
     # acc, loss = test_(global_model, criterion, test_loader)
 
+
+
+    # # TEST SPLITTING A TENSOR THEN RECONSTRUCTING IT:
+    # t1 = clients_masks[0][0]
+    # lt1 = split_additive_mask(t1, 2, rand_low, rand_high)
+    # t2 = torch.stack(sum_list_masks(lt1))
+    # print("t1.shape={} get_shape(lt1)={} t2.shape={}".format(t1.shape,get_shape(lt1),t2.shape))
+    # if not torch.allclose(t1, t2):
+    #     raise("#####not torch.allclose(t1, t2)-----------")
+    # else:
+    #     print("t1 and t2 are the same...")
+
+
+
     print("Distributed masking clients_models...")
     masks_shapes = [parm.size() for parm in clients_models[0].parameters()]
     for i in range(num_participants):
-        mask_model(seeds[i], clients_models[i], rand_high, rand_low)
-    print("******* mask has been added")
+        mask_model(seeds[i], clients_models[i], rand_low, rand_high)
+    print("Mask has been added")
     print("Distributed unmasking clients_models...")
-    clients_masks = [generate_masks_from_seed(seeds[i], masks_shapes, rand_high, rand_low) for i in range(num_participants)]
-    global_mask = sum_list_masks(clients_masks)
-    server_aggregate_masked(global_model, clients_models, global_mask)
-    print("******* mask has been removed")
+    clients_masks = [generate_masks_from_seed(seeds[i], masks_shapes, rand_low, rand_high) for i in range(num_participants)]    # N*P*mask
+    # print("get_shape(clients_masks)={}".format(get_shape(clients_masks)))
+    print("{} Client masks generated".format(num_participants))
+
+    global_masks = sum_list_masks(clients_masks)
+    # print("get_shape(global_masks)={}".format(get_shape(global_masks)))
+    
+    clients_masks_splits = [split_additive_masks(client_masks, committee_size, rand_low, rand_high) for client_masks in clients_masks]   # N*P*n*mask
+    # print("get_shape(clients_masks_splits)={}".format(get_shape(clients_masks_splits)))
+    print("Each client masks splitted over {} shares".format(committee_size))
+
+    # A = [[torch.stack(sum_list_masks(P)) for P in N] for N in clients_masks_splits]
+    # print("get_shape(A)={}".format(get_shape(A)))
+    # if not are_tensors_equal(A, clients_masks):
+    #     raise("#####not are_tensors_equal(A[0][0], clients_masks[0][0])-----------")
+    # print("A and clients_masks are the same...")
+    # global_masks2 = sum_list_masks(A)
+    # print("get_shape(global_masks2)={}".format(get_shape(global_masks2)))
+    # if not are_tensors_equal(global_masks, global_masks2):
+    #     raise("#####not are_tensors_equal(global_masks, global_masks2)-----------")
+    # print("global_masks and global_masks2 are the same...")
+
+    transposed_clients_masks_splits = transpose_list(clients_masks_splits, axes=(2,0,1))   # n*N*P*mask
+    # print("get_shape(transposed_clients_masks_splits)={}".format(get_shape(transposed_clients_masks_splits)))
+    print("Client masks transposed")
+
+    if not are_tensors_equal(clients_masks_splits, transpose_list(transposed_clients_masks_splits, axes=(1,2,0))):
+        raise("#####transpose_list tests NOT successful-----------")
+
+    global_masks_splits = [sum_list_masks(one_transposed_clients_masks_splits) for one_transposed_clients_masks_splits in transposed_clients_masks_splits]
+    # print("get_shape(global_masks_splits)={}".format(get_shape(global_masks_splits)))
+    print("Global masks splits calculated")
+
+    global_masks3 = sum_list_masks(global_masks_splits)
+    # print("get_shape(global_masks3)={}".format(get_shape(global_masks3)))
+    print("Global masks calculated")
+
+    if not are_tensors_equal(global_masks, global_masks3):
+        raise("#####not are_tensors_equal(global_masks, global_masks3)!!!")
+
+    server_aggregate_masked(global_model, clients_models, global_masks)
+    print("Mask removed and global model aggregated successfully")
     acc, loss = test_(global_model, criterion, test_loader)
 
     print(f'##########{r+1}-th round')
