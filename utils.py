@@ -83,3 +83,17 @@ def transpose_list(lst, axes=None):
     recursive_transpose(lst, [], axes, shape)
 
     return transposed_lst
+
+
+def count_leading_zeros(binary_data):
+    # Convert the bytes object to a binary string representation
+    binary_string = ''.join(f'{byte:08b}' for byte in binary_data)
+    
+    # Count the leading zeros in the binary string
+    count = 0
+    for char in binary_string:
+        if char == '0':
+            count += 1
+        else:
+            break
+    return count

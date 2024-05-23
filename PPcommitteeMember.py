@@ -19,10 +19,8 @@ if (len(sys.argv) != 2):
     raise "You should give the listening port number of this committee member in the command line as: python PPcommitteeMember.py PORT"
 MY_PORT = int(sys.argv[1])
 
-# secret_key = secrets.token_bytes(nbytes=32)
-# public_key = ecvrf_edwards25519_sha512_elligator2.get_public_key(secret_key)
-# p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, alpha_string)
-# b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
+secret_key = secrets.token_bytes(nbytes=32)
+public_key = ecvrf_edwards25519_sha512_elligator2.get_public_key(secret_key)
 
 listening_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 listening_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -30,9 +28,23 @@ listening_sock.bind(("127.0.0.1", MY_PORT))
 print("Listening socket is bound to address 127.0.0.1 & port {}".format(MY_PORT))
 server_soc = socket.socket()
 server_soc.connect((SERVER_IP, SERVER_PORT_FOR_COMMITTEE))
-msg = ['Messgage from committee ', str(MY_PORT)]
-send_msg(server_soc, msg)
+send_msg(server_soc, ['Committee member info', str(MY_PORT), public_key])
 print("Connected to the server")
+print("Waiting for committee list from the server...")
+msg0 = recv_msg(server_soc, 'Server committee list message')
+committee_list = msg0[1]
+
+p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, pickle.dumps(committee_list))
+b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
+is_qualified = count_leading_zeros(beta_string) >= leading_bits
+
+if is_qualified:
+    print("Qualified for the upcoming rounds, sending the proof to the server...")
+    send_msg(server_soc, ['Committee member qualification message', pi_string])
+else:
+    send_msg(server_soc, ['Committee member qualification message', 'not qualified']) # just to avoid timeout
+    print("Not qualified for the upcoming rounds, quitting...")
+    sys.exit()
 
 basic_model = BasicNet()
 
@@ -50,13 +62,13 @@ while True:
     print("Waiting for clients to send their masks...")
     clients_masks_splits = []
     for i in range(num_participants):   # TODO should run in parallel...
-        msg0 = recv_msg(partcicpants[i], 'Messgage from client ')
+        msg0 = recv_msg(partcicpants[i], 'Client mask split message')
         clients_masks_splits.append(msg0[1])
         is_last_round = msg0[2]
     print("All masks splits received from clients")
     local_global_mask = sum_list_masks(clients_masks_splits)
     print("Sending the global mask to the server...")
-    msg = ['Msg_from_committee', local_global_mask, False]
+    msg = ['Committee mask message', local_global_mask, False]
     send_msg(server_soc, msg)
     print("Global mask sent to server")
     if is_last_round:

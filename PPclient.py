@@ -44,6 +44,9 @@ print("Connected to the server")
 secret_key = secrets.token_bytes(nbytes=32)
 public_key = ecvrf_edwards25519_sha512_elligator2.get_public_key(secret_key)
 
+send_msg(server_soc, ['Client info', public_key])
+print("Public key sent to the server")
+
 # Initialize the training environment
 torch.backends.cudnn.benchmark=True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -73,40 +76,35 @@ opt =optim.SGD(my_model.parameters(), lr=LR, momentum=MOMENTUM)
 round = 1
 while True:
     print("Waiting for the global model from the server...")
-    msg0 = recv_msg(server_soc, 'Messgage from server ') 
+    msg0 = recv_msg(server_soc, 'Server global model message') 
     my_model.load_state_dict(msg0[1].state_dict())
     is_last_round = msg0[2]
     if (round == 1):
         committee_list = msg0[3]
+        selected_committe_members_list = msg0[4]
+        print("Current committee members:{}".format(committee_list))
     print("########## Round {}".format(round))
     committee_sockets = []
-    print("committee_list: {}".format(committee_list))
-    for cm in committee_list:
+    for i in range(len(selected_committe_members_list)):
         cm_soc = socket.socket()
-        cm_soc.connect((cm['ip'], cm['port']))
+        cm_soc.connect((committee_list[selected_committe_members_list[i]['index']]['ip'], committee_list[selected_committe_members_list[i]['index']]['port']))
         committee_sockets.append(cm_soc)
     print("Connected to all committee members")
-    train_(epochs, my_model, criterion, opt, train_loader, valid_loader)
+    train_(EPOCHS, my_model, criterion, opt, train_loader, valid_loader)
     acc, loss = test_(my_model, criterion, valid_loader)
     seed = random.getrandbits(RAND_BIT_SIZE)
     masks_shapes = [parm.size() for parm in my_model.parameters()]
     masks = generate_masks_from_seed(seed, masks_shapes, rand_low, rand_high)
 
-    # for param in my_model.parameters():
-    #     print("original model my_model.parameters()={}".format(param.data))
-
     mask_model(seed, my_model, rand_low, rand_high)
 
-    # for param in my_model.parameters():
-    #     print("before removing masks my_model.parameters()={}".format(param.data))
-    
-    send_msg(server_soc, ['Msg_from_client', my_model, is_last_round])
+    send_msg(server_soc, ['Client local model message', my_model, is_last_round])
     print("Masked local model sent to server")
-    masks_splits = split_additive_masks(masks, committee_size, rand_low, rand_high) # shape: P*n*mask
+    masks_splits = split_additive_masks(masks, len(committee_sockets), rand_low, rand_high) # shape: P*n*mask
     masks_splits = transpose_list(masks_splits, axes=(1,0)) # shape: n*P*mask
-    for i in range(committee_size):    # Should run in parallel
-        send_msg(committee_sockets[i], ['Msg_from_client', masks_splits[i], is_last_round])
-        print("Random seed sent to committee member {}".format(committee_sockets[i].getpeername()))
+    for i in range(len(committee_sockets)):    # Should run in parallel
+        send_msg(committee_sockets[i], ['Client mask split message', masks_splits[i], is_last_round])
+        print("Random mask split sent to committee member {}".format(committee_sockets[i].getpeername()))
         committee_sockets[i].close()
     print("masks sent to all committee members")
     if is_last_round:

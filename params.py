@@ -16,12 +16,13 @@ training_files_location = "data/"
 BATCH_SIZE = 32
 LR = 0.001
 MOMENTUM = 0.9
-epochs = 10
+EPOCHS = 10
 
 RAND_BIT_SIZE = 16
 rand_low = -100.0
 rand_high = +100.0
 
-num_participants = 3
-num_rounds = 10
-committee_size = 2
+num_participants = 1
+num_rounds = 5
+committee_size = 4
+leading_bits = 1

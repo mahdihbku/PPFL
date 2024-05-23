@@ -17,6 +17,8 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from params import *
+import ecvrf_edwards25519_sha512_elligator2
+
 
 clients_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 clients_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -40,33 +42,52 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 test_loader = PrepareDataLoader(test_loader, to_device)
 
 print("Waiting for {} clients to join...".format(num_participants))
-participants = []
-while len(participants) < num_participants:
+list_of_participants = []
+while len(list_of_participants) < num_participants:
     clients_sock.listen(MAX_CONNECTIONS)
     (participant_sock, (ip, port)) = clients_sock.accept()
     print('New connection from client ', (ip,port))
-    participants.append(participant_sock)
+    msg0 = recv_msg(participant_sock, 'Client info')
+    list_of_participants.append({'socket':participant_sock, 'key':msg0[1]})
 print('All participants have joined')
 
 print("Waiting for {} committee members to join...".format(committee_size))
-committee_members = []
-while len(committee_members) < committee_size:
+committee_members_list = []
+while len(committee_members_list) < committee_size:
     committee_sock.listen(MAX_CONNECTIONS)
     (committee_member_sock, (ip, port)) = committee_sock.accept()
     print('New connection from committee member ', (ip,port))
-    msg0 = recv_msg(committee_member_sock, 'Messgage from committee ')
-    committee_members.append({'sock':committee_member_sock, 'ip':ip, 'port':int(msg0[1])})
+    msg0 = recv_msg(committee_member_sock, 'Committee member info')
+    committee_members_list.append({'sock':committee_member_sock, 'ip':ip, 'port':int(msg0[1]), 'key':msg0[2]})
 print('All committee members have joined')
 
 is_last_round = True if num_rounds == 1 else False
 losses_testing = []
 acc_testing = []
-committee_list = [{'ip':cm['ip'],'port':cm['port']} for cm in committee_members]
-print("committee_list: {}".format(committee_list))
+committee_participants_list = [{'ip':cm['ip'],'port':cm['port'],'key':cm['key']} for cm in committee_members_list]
+print("participants_list: {}".format(committee_participants_list))
+
+print("Sending committee participants list to committee members...")
+msg = ['Server committee participants list message', committee_participants_list]
+for cm in committee_members_list:
+    send_msg(cm['sock'], msg)
+selected_committe_members_list = []
+for i in range(len(committee_members_list)):
+    msg0 = recv_msg(committee_members_list[i]['sock'], 'Committee member qualification message')
+    if msg0[1] != 'not qualified':
+        '''Verify the proof of qualification'''
+        _, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_verify(committee_members_list[i]['key'], msg0[1], pickle.dumps(committee_participants_list))
+        is_qualified = count_leading_zeros(beta_string) >= leading_bits
+        if is_qualified:
+            selected_committe_members_list.append({'index':i,'proof':msg0[1]})
+        else:
+            print("The proof received from committee member {} ({}:{}) is not valid!".format(i, committee_members_list[i]['ip'], committee_members_list[i]['port']))
+print("Number if elected committee members for the upcoming rounds is {}/{}".format(len(selected_committe_members_list), len(committee_participants_list)))
+
 print("Sending the global model to clients...")
-msg = ['MSG_SERVER_TO_CLIENT_INTILAIZATION', global_model, is_last_round, committee_list]
-for participant in participants:
-    send_msg(participant, msg)
+msg = ['Server global model message', global_model, is_last_round, committee_participants_list, selected_committe_members_list]
+for participant in list_of_participants:
+    send_msg(participant['socket'], msg)
 
 round = 1
 while True:
@@ -75,26 +96,20 @@ while True:
     print("Waiting for local models from clients...")
     clients_models = []
     for i in range(num_participants):   # TODO should run in parallel...
-        msg0 = recv_msg(participants[i], 'Messgage from client ')  
+        msg0 = recv_msg(list_of_participants[i]['socket'], 'Client local model message')
         clients_models.append(msg0[1])
     print("Local models from clients received")
 
     print("Waiting for masks from committee members...")
     global_masks_splits = []
-    for i in range(committee_size):   # TODO should run in parallel...
-        msg0 = recv_msg(committee_members[i]['sock'], 'Messgage from committee ')  
+    for i in range(len(selected_committe_members_list)):   # TODO should run in parallel...
+        msg0 = recv_msg(committee_members_list[selected_committe_members_list[i]['index']]['sock'], 'Committee mask message')
         global_masks_splits.append(msg0[1])
     global_masks = sum_list_masks(global_masks_splits)
     print("Global mask computed")
 
-    # for param in clients_models[0].parameters():
-    #     print("before removing masks my_model.parameters()={}".format(param.data))
-    
     server_aggregate_masked(global_model, clients_models, global_masks)
 
-    # for param in global_model.parameters():
-    #     print("new global model global_model.parameters()={}".format(param.data))
-    
     acc, loss = test_(global_model, criterion, test_loader)
     losses_testing.append(loss)
     acc_testing.append(acc)
@@ -102,9 +117,9 @@ while True:
     if round+1 >= num_rounds:
         is_last_round = True
 
-    msg = ['Server_Sends_GM', global_model, is_last_round]
-    for p in participants:
-        send_msg(p, msg)
+    msg = ['Server global model message', global_model, is_last_round]
+    for p in list_of_participants:
+        send_msg(p['socket'], msg)
 
     if round == num_rounds:
         print("Last round reached, quitting...")
