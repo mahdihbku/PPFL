@@ -95,8 +95,15 @@ def parallel_verification(secret_key, public_key, input_byte_size, num_verificat
 
     
     print("Verification times for input size and number of verifications:")
-    print([(x, y) for x in input_byte_size for y in num_verifications])
-    print([sum(x) / len(x) for x in zip(*times_list)])
+    combinations_list = [(x, y) for x in input_byte_size for y in num_verifications]
+    print(combinations_list)
+    avg_times = [sum(x) / len(x) for x in zip(*times_list)]
+    print(avg_times)
+
+    f = open("experiments/vrf_verif_time.csv", "w")
+    for i in range(len(combinations_list)):
+        f.write(str(combinations_list[i])+', '+str(avg_times[i])+'\n')
+    f.close()
 
 if __name__ == "__main__":
     input_byte_size = [100, 200, 500, 1000, 2000, 5000, 10000, 100000]
@@ -113,32 +120,31 @@ if __name__ == "__main__":
         print("Key generation time: {} ms".format(gen_t/execution_times*1000))
         key_gen_times.append(gen_t/execution_times*1000)
 
-    # proving time x=alpha_string_size
-
-    prov_times = []
-    for size in input_byte_size:
-        prov_t = 0.0
-        selected = 0
-        for _ in range(execution_times):
-            alpha_string = os.urandom(size)
-            t1 = time.perf_counter()
-            p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, alpha_string)
-            b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
-            if count_leading_zeros(beta_string) >= 5:
-                selected += 1
-            prov_t += time.perf_counter() - t1
-        prov_times.append(prov_t/execution_times*1000)
-    print("Proving times for input size:")
-    print(input_byte_size)
-    print(prov_times)
-
-    # verification time x=alpha_string_size
-    # input_byte_size = [100, 200, 500, 1000, 2000, 5000, 10000]
-    # times = []
+    # # proving time x=alpha_string_size
+    # prov_times = []
     # for size in input_byte_size:
-    #     verf_t = 0.0
+    #     prov_t = 0.0
     #     selected = 0
     #     for _ in range(execution_times):
+    #         alpha_string = os.urandom(size)
+    #         t1 = time.perf_counter()
+    #         p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, alpha_string)
+    #         b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
+    #         if count_leading_zeros(beta_string) >= 5:
+    #             selected += 1
+    #         prov_t += time.perf_counter() - t1
+    #     prov_times.append(prov_t/execution_times*1000)
+    # print("Proving times for input size:")
+    # print(input_byte_size)
+    # print(prov_times)
+
+    # # verification time x=alpha_string_size
+    # times_list = []
+    # for _ in range(execution_times):
+    #     times = []
+    #     for size in input_byte_size:
+    #         verf_t = 0.0
+    #         selected = 0
     #         alpha_string = os.urandom(size)
     #         p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, alpha_string)
     #         b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
@@ -148,45 +154,21 @@ if __name__ == "__main__":
     #             raise("Commitment not verified")
     #         if count_leading_zeros(beta_string) >= 5:
     #             selected += 1
-    #         verf_t += time.perf_counter() - t1
-    #     times.append(verf_t/execution_times*1000)
+    #         times.append((time.perf_counter() - t1)*1000)
+    #     times_list.append(times)
     # print("Verification times for input size:")
     # print(input_byte_size)
-    # print(times)
+    # avg_times = [sum(x) / len(x) for x in zip(*times_list)]
+    # print([sum(x) / len(x) for x in zip(*times_list)])
 
-    # verification time x=alpha_string_size
-    times_list = []
-    for _ in range(execution_times):
-        times = []
-        for size in input_byte_size:
-            verf_t = 0.0
-            selected = 0
-            alpha_string = os.urandom(size)
-            p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_key, alpha_string)
-            b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
-            t1 = time.perf_counter()
-            result, beta_string2 = ecvrf_edwards25519_sha512_elligator2.ecvrf_verify(public_key, pi_string, alpha_string)
-            if not (result == "VALID" and beta_string == beta_string2):
-                raise("Commitment not verified")
-            if count_leading_zeros(beta_string) >= 5:
-                selected += 1
-            times.append((time.perf_counter() - t1)*1000)
-        times_list.append(times)
-    print("Verification times for input size:")
-    print(input_byte_size)
-    avg_times = [sum(x) / len(x) for x in zip(*times_list)]
-    print([sum(x) / len(x) for x in zip(*times_list)])
-
-    f = open("experiments/vrf_keygen_prove_time.csv", "w")
-    for i in range(len(input_byte_size)):
-        f.write(str(input_byte_size[i])+', '+str(key_gen_times[i])+', '+str(prov_times[i])+', '+str(avg_times[i])+'\n')
-    f.close()
-
-    quit()
+    # f = open("experiments/vrf_keygen_prove_time.csv", "w")
+    # for i in range(len(input_byte_size)):
+    #     f.write(str(input_byte_size[i])+', '+str(key_gen_times[i])+', '+str(prov_times[i])+', '+str(avg_times[i])+'\n')
+    # f.close()
 
     # # verification time x=number_of_verifications
-    num_verifications = [1, 5, 10, 20, 30]
-    input_byte_size = [100, 10000]
+    num_verifications = [1, 5, 10, 15, 20, 25, 30]
+    input_byte_size = [1000]
     # times = []
     # for size in input_byte_size:
     #     for num_verifs in num_verifications:
