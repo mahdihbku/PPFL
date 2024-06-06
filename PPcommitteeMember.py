@@ -38,6 +38,10 @@ p_status, pi_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_prove(secret_ke
 b_status, beta_string = ecvrf_edwards25519_sha512_elligator2.ecvrf_proof_to_hash(pi_string)
 is_qualified = count_leading_zeros(beta_string) >= leading_bits
 
+# print(f"Secret Key Size: {len(secret_key)} bytes")
+# print(f"Public Key Size: {len(public_key)} bytes")
+# print(f"Proof Size: {len(pi_string)} bytes")
+
 if is_qualified:
     print("Qualified for the upcoming rounds, sending the proof to the server...")
     send_msg(server_soc, ['Committee member qualification message', pi_string])

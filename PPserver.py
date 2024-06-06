@@ -34,6 +34,8 @@ device = torch.device("cpu")
 criterion = nn.CrossEntropyLoss()
 global_model = BasicNet().to(device)
 
+# print(f"Total number of parameters: {sum(p.numel() for p in global_model.parameters())}")
+
 with open(testing_file, mode='rb') as f:
     test = pickle.load(f)
 X_test, y_test = test['features'], test['labels']
@@ -42,7 +44,7 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 test_loader = PrepareDataLoader(test_loader, to_device)
 
 print("Waiting for {} clients to join...".format(num_participants))
-list_of_participants = []
+list_of_participants = []   # includes the list of all users. N * (socket, key)
 while len(list_of_participants) < num_participants:
     clients_sock.listen(MAX_CONNECTIONS)
     (participant_sock, (ip, port)) = clients_sock.accept()
@@ -52,7 +54,7 @@ while len(list_of_participants) < num_participants:
 print('All participants have joined')
 
 print("Waiting for {} committee members to join...".format(committee_size))
-committee_members_list = []
+committee_members_list = [] # this list is local; it includes sockets. n * (socket, ip, port, key)
 while len(committee_members_list) < committee_size:
     committee_sock.listen(MAX_CONNECTIONS)
     (committee_member_sock, (ip, port)) = committee_sock.accept()
@@ -64,14 +66,15 @@ print('All committee members have joined')
 is_last_round = True if num_rounds == 1 else False
 losses_testing = []
 acc_testing = []
-committee_participants_list = [{'ip':cm['ip'],'port':cm['port'],'key':cm['key']} for cm in committee_members_list]
+committee_participants_list = [{'ip':cm['ip'],'port':cm['port'],'key':cm['key']} for cm in committee_members_list] # this list is global; will be shared with all users. n * (ip, port, key)
 print("participants_list: {}".format(committee_participants_list))
 
 print("Sending committee participants list to committee members...")
 msg = ['Server committee participants list message', committee_participants_list]
 for cm in committee_members_list:
     send_msg(cm['sock'], msg)
-selected_committe_members_list = []
+
+selected_committe_members_list = [] # this list will be shared with all users. C * (index, proof)
 for i in range(len(committee_members_list)):
     msg0 = recv_msg(committee_members_list[i]['sock'], 'Committee member qualification message')
     if msg0[1] != 'not qualified':

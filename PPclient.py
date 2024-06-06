@@ -80,9 +80,10 @@ while True:
     my_model.load_state_dict(msg0[1].state_dict())
     is_last_round = msg0[2]
     if (round == 1):
-        committee_list = msg0[3]
-        selected_committe_members_list = msg0[4]
+        committee_list = msg0[3]    # n * (ip, port, key)
+        selected_committe_members_list = msg0[4]    # C * (index, proof)
         print("Current committee members:{}".format(committee_list))
+        print("Current selected committee members:{}".format(selected_committe_members_list))
     print("########## Round {}".format(round))
     committee_sockets = []
     for i in range(len(selected_committe_members_list)):
@@ -102,7 +103,7 @@ while True:
     print("Masked local model sent to server")
     masks_splits = split_additive_masks(masks, len(committee_sockets), rand_low, rand_high) # shape: P*n*mask
     masks_splits = transpose_list(masks_splits, axes=(1,0)) # shape: n*P*mask
-    for i in range(len(committee_sockets)):    # Should run in parallel
+    for i in range(len(committee_sockets)):    # TODO Should run in parallel
         send_msg(committee_sockets[i], ['Client mask split message', masks_splits[i], is_last_round])
         print("Random mask split sent to committee member {}".format(committee_sockets[i].getpeername()))
         committee_sockets[i].close()

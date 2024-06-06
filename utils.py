@@ -84,7 +84,6 @@ def transpose_list(lst, axes=None):
 
     return transposed_lst
 
-
 def count_leading_zeros(binary_data):
     # Convert the bytes object to a binary string representation
     binary_string = ''.join(f'{byte:08b}' for byte in binary_data)

@@ -43,9 +43,9 @@ for _ in range(rounds):
     #
 
     # Later, Bob validates Alice's subsequently shared public_key, pi_string, and alpha_string
-    # result, beta_string2 = ecvrf_edwards25519_sha512_elligator2.ecvrf_verify(public_key, pi_string, alpha_string)
-    # if not (p_status == "VALID" and b_status == "VALID" and result == "VALID" and beta_string == beta_string2):
-    #     raise("Commitment not verified")
+    result, beta_string2 = ecvrf_edwards25519_sha512_elligator2.ecvrf_verify(public_key, pi_string, alpha_string)
+    if not (p_status == "VALID" and b_status == "VALID" and result == "VALID" and beta_string == beta_string2):
+        raise("Commitment not verified")
 
     # print("count_leading_zeros(beta_string)={}".format(count_leading_zeros(beta_string)))
     if count_leading_zeros(beta_string) >= leading_bits:
