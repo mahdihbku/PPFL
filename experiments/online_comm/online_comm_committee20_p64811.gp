@@ -17,8 +17,8 @@ set ytics add ("2 GB" 2000)
 set log y
 
 # x=number of clients, for committee_size=10 and p=64811
-plot [0:][0.5:2001] 'online_comm.csv' every 45::38 using 1:4 title 'Client communication' with linespoints lc 7 pt 2 ps 2, \
-             'online_comm.csv' every 45::38 using 1:7 title 'Client communication baseline' with linespoints lt 0 lc 7 pt 2 ps 2, \
-             'online_comm.csv' every 45::38 using 1:5 title 'Server communication' with linespoints pt 4 ps 2 lc 2, \
-             'online_comm.csv' every 45::38 using 1:8 title 'Server communication baseline' with linespoints lt 0 pt 4 ps 2 lc 2, \
-             'online_comm.csv' every 45::38 using 1:6 title 'Committee member communication' with linespoints pt 6 ps 2 lc 3
+plot [0:][0.49:1101] 'online_comm.csv' every 45::37 using 1:4 title 'Client' with linespoints lc 7 pt 2 ps 2, \
+             'online_comm.csv' every 45::37 using 1:7 title 'Client baseline' with linespoints lt 0 lc 7 pt 2 ps 2, \
+             'online_comm.csv' every 45::37 using 1:5 title 'Server' with linespoints pt 4 ps 2 lc 2, \
+             'online_comm.csv' every 45::37 using 1:8 title 'Server baseline' with linespoints lt 0 pt 4 ps 2 lc 2, \
+             'online_comm.csv' every 45::37 using 1:6 title 'Committee member' with linespoints pt 6 ps 2 lc 3
