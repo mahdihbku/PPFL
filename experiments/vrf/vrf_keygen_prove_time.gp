@@ -3,7 +3,7 @@
 set terminal png font "Helvetica,14"
 set output "vrf1.png"
 set datafile sep ','
-set key center right Right
+set key center right Right offset 0, -1.5
 set xlabel "Input size (Bytes)"
 set ylabel 'Computation time (ms)'
 # set xtics 0,2000,100000

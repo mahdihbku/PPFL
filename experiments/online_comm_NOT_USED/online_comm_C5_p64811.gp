@@ -1,5 +1,5 @@
 set terminal png font "Helvetica,14" 
-set output "online_comm_committee5_p64811.png"
+set output "online_comm_C5_p64811.png"
 set datafile sep ','
 set key center right Right offset 0, -1.5
 set xlabel "Number of clients"

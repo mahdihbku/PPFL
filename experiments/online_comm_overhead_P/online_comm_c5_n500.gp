@@ -6,7 +6,7 @@ set xlabel "P" offset 0, -1
 set ylabel "Overhead communication cost"
 set ytics add ("100 KB" 0.1)
 set ytics add ("1 MB" 1)
-set ytics add ("3 MB" 3)
+set ytics add ("" 3)
 set ytics add ("10 MB" 10)
 set ytics add ("100 MB" 100)
 set ytics add ("1 GB" 1000)
