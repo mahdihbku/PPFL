@@ -31,10 +31,14 @@ import ecvrf_edwards25519_sha512_elligator2
 
 import socket
 import pickle
+import time
 
 if (len(sys.argv) != 2):
     raise "You should give the client index in the command line as: python PPclient.py INDEX"
 MY_CLIENT_INDEX = sys.argv[1]
+
+report_time = True
+report_time_file = "experiments/online_comp/client.csv"
 
 server_soc = socket.socket()
 server_soc.connect((SERVER_IP, SERVER_PORT_FOR_CLIENT))
@@ -93,21 +97,34 @@ while True:
     print("Connected to all committee members")
     train_(EPOCHS, my_model, criterion, opt, train_loader, valid_loader)
     acc, loss = test_(my_model, criterion, valid_loader)
+
+    t1 = time.perf_counter()
     seed = random.getrandbits(RAND_BIT_SIZE)
     masks_shapes = [parm.size() for parm in my_model.parameters()]
     masks = generate_masks_from_seed(seed, masks_shapes, rand_low, rand_high)
-
     mask_model(seed, my_model, rand_low, rand_high)
+    masks_splits = split_additive_masks(masks, len(committee_sockets), rand_low, rand_high) # shape: P*n*mask
+    masks_splits = transpose_list(masks_splits, axes=(1,0)) # shape: n*P*mask
+    comp_t = (time.perf_counter() - t1)*1000
 
     send_msg(server_soc, ['Client local model message', my_model, is_last_round])
     print("Masked local model sent to server")
-    masks_splits = split_additive_masks(masks, len(committee_sockets), rand_low, rand_high) # shape: P*n*mask
-    masks_splits = transpose_list(masks_splits, axes=(1,0)) # shape: n*P*mask
+
     for i in range(len(committee_sockets)):    # TODO Should run in parallel
         send_msg(committee_sockets[i], ['Client mask split message', masks_splits[i], is_last_round])
         print("Random mask split sent to committee member {}".format(committee_sockets[i].getpeername()))
         committee_sockets[i].close()
-    print("masks sent to all committee members")
+    print("Masks sent to all committee members")
+
+    if report_time and int(MY_CLIENT_INDEX)==1: # only client 1 will report it's time
+        N = len(committee_list)
+        C = len(selected_committe_members_list)
+        P = sum(p.numel() for p in my_model.parameters())
+        f = open(report_time_file, "a")
+        f.write(str(N)+', '+str(C)+', '+str(P)+', '+str(comp_t)+'\n')
+        f.close()
+        print("Reported time saved in file {}".format(report_time_file))
+
     if is_last_round:
         print("Last round reached, quitting...")
         break

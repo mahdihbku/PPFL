@@ -7,6 +7,7 @@ Created on May 8 2024
 
 import socket
 import pickle
+import time
 from utils import *
 from PPfuncs import *
 from models import BasicNet
@@ -18,6 +19,9 @@ import ecvrf_edwards25519_sha512_elligator2
 if (len(sys.argv) != 2):
     raise "You should give the listening port number of this committee member in the command line as: python PPcommitteeMember.py PORT"
 MY_PORT = int(sys.argv[1])
+
+report_time = True
+report_time_file = "experiments/online_comp/committee.csv"
 
 secret_key = secrets.token_bytes(nbytes=32)
 public_key = ecvrf_edwards25519_sha512_elligator2.get_public_key(secret_key)
@@ -70,7 +74,19 @@ while True:
         clients_masks_splits.append(msg0[1])
         is_last_round = msg0[2]
     print("All masks splits received from clients")
+
+    t1 = time.perf_counter()
     local_global_mask = sum_list_masks(clients_masks_splits)
+    comp_t = (time.perf_counter() - t1)*1000
+
+    if report_time and MY_PORT==12344:  # Only 1 committee member will report the time; the one that have 12344 as port number
+        N = num_participants
+        C = len(committee_list)
+        f = open(report_time_file, "a")
+        f.write(str(N)+', '+str(C)+', '+str(comp_t)+'\n')
+        f.close()
+        print("Reported time saved in file {}".format(report_time_file))
+
     print("Sending the global mask to the server...")
     msg = ['Committee mask message', local_global_mask, False]
     send_msg(server_soc, msg)

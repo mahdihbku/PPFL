@@ -21,7 +21,7 @@ RAND_BIT_SIZE = 16
 rand_low = -100.0
 rand_high = +100.0
 
-num_participants = 3
-num_rounds = 5
-committee_size = 2
+num_rounds = 4
+num_participants = 5
+committee_size = 3
 leading_bits = 0

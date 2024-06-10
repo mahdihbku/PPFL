@@ -7,6 +7,7 @@ Created on Tue Mar 16 01:49:47 2021
 
 import socket
 import pickle
+import time
 from Data_process import *
 from models import *
 from tqdm import tqdm
@@ -19,6 +20,8 @@ from torch.utils.data import DataLoader
 from params import *
 import ecvrf_edwards25519_sha512_elligator2
 
+report_time = True
+report_time_file = "experiments/online_comp/server.csv"
 
 clients_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 clients_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -108,10 +111,22 @@ while True:
     for i in range(len(selected_committe_members_list)):   # TODO should run in parallel...
         msg0 = recv_msg(committee_members_list[selected_committe_members_list[i]['index']]['sock'], 'Committee mask message')
         global_masks_splits.append(msg0[1])
-    global_masks = sum_list_masks(global_masks_splits)
-    print("Global mask computed")
 
+    t1 = time.perf_counter()
+    global_masks = sum_list_masks(global_masks_splits)
     server_aggregate_masked(global_model, clients_models, global_masks)
+    comp_t = (time.perf_counter() - t1)*1000
+
+    if report_time:
+        N = num_participants
+        C = len(selected_committe_members_list)
+        P = sum(p.numel() for p in global_model.parameters())
+        f = open(report_time_file, "a")
+        f.write(str(N)+', '+str(C)+', '+str(P)+', '+str(comp_t)+'\n')
+        f.close()
+        print("Reported time saved in file {}".format(report_time_file))
+
+    print("Global model unmasked")
 
     acc, loss = test_(global_model, criterion, test_loader)
     losses_testing.append(loss)
