@@ -35,7 +35,12 @@ import time
 
 if (len(sys.argv) != 2):
     raise "You should give the client index in the command line as: python PPclient.py INDEX"
-MY_CLIENT_INDEX = sys.argv[1]
+MY_CLIENT_INDEX = int(sys.argv[1])
+
+if MY_CLIENT_INDEX < 1 or MY_CLIENT_INDEX > MAX_DB_SPLITS:
+    MY_CLIENT_INDEX = random.randint(1, MAX_DB_SPLITS)
+
+do_not_train = True
 
 report_time = True
 report_time_file = "experiments/online_comp/client.csv"
@@ -95,7 +100,8 @@ while True:
         cm_soc.connect((committee_list[selected_committe_members_list[i]['index']]['ip'], committee_list[selected_committe_members_list[i]['index']]['port']))
         committee_sockets.append(cm_soc)
     print("Connected to all committee members")
-    train_(EPOCHS, my_model, criterion, opt, train_loader, valid_loader)
+    if not do_not_train:
+        train_(EPOCHS, my_model, criterion, opt, train_loader, valid_loader)
     acc, loss = test_(my_model, criterion, valid_loader)
 
     t1 = time.perf_counter()

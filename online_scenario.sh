@@ -1,12 +1,14 @@
 #!/bin/bash
 
+source .venv/bin/activate
+
 # List of integer parameters for client.py instances
-# Ns=(100 200 300 400 500)
-Ns=(3 5)
+Ns=(10 20 40)
+# Ns=(10 40)
 
 # List of integer parameters for committee.py instances
-# Cs=(3 5 10 15 20)
-Cs=(2 3)
+Cs=(3 5 10 15 20)
+# Cs=(3 10)
 
 # Clear output files
 rm experiments/online_comp/server.csv
@@ -37,7 +39,7 @@ do
             python PPclient.py "$i" > /dev/null &
         done
 
-        sleep 2
+        sleep 3
 
         # Launch committee.py instances with different parameters
         for ((i=1; i<=C; i++))
