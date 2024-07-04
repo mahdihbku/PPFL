@@ -41,7 +41,6 @@ do
 
         sleep 3
 
-        # Launch committee.py instances with different parameters
         for ((i=1; i<=C; i++))
         do
             port=$((12343 + i))
@@ -49,7 +48,7 @@ do
             python PPcommitteeMember.py "$port" > /dev/null &
         done
 
-        echo "All scripts launched."
+        echo "All scripts launched. Waiting for the server to finish..."
         wait $server_pid
     done
 done

@@ -8,61 +8,13 @@ Created on May 8 2024
 import copy
 import numpy as np
 import torch
-import random
 from models import *
-
-# def split_additive_secret(secret, n):
-#     shares = [random.randint(0, secret) for _ in range(n - 1)]
-#     shares.append(secret - sum(shares))
-#     return shares
-
-# def reconstruct_additive_secret(shares):
-#     return sum(shares)
-
-# def split_additive_mask(mask, n):
-#     shares_dict = {}
-#     for name, param in mask.named_parameters():
-#         shares = [split_additive_secret(param.data[i].item(), n) for i in range(param.data.numel())]
-#         shares_dict[name] = shares
-#     return shares_dict
-
-# def reconstruct_additive_mask(shares_dict):
-#     reconstructed_model = BasicNet()  # Create a new instance of the model to hold the reconstructed parameters
-#     for name, shares_list in shares_dict.items():
-#         param_shape = shares_list[0].shape  # Get the shape of the parameter
-#         reconstructed_param = torch.zeros(param_shape)  # Initialize the parameter with zeros
-#         for i in range(param_shape[0]):
-#             for j in range(param_shape[1]):
-#                 shares = [shares_list[k][i][j] for k in range(len(shares_list))]
-#                 reconstructed_param[i][j] = reconstruct_additive_secret(shares)  # Combine the shares to reconstruct the parameter
-#         setattr(reconstructed_model, name, torch.nn.Parameter(reconstructed_param))
-#     return reconstructed_model
-
-# def pairwise_add_shares(shares_dicts):
-#     combined_shares_dict = shares_dicts[0].copy()
-#     for shares_dict in shares_dicts[1:]:
-#         for name, shares_list in shares_dict.items():
-#             combined_shares_list = combined_shares_dict[name]
-#             for i in range(len(shares_list)):
-#                 for j in range(len(shares_list[i])):
-#                     combined_shares_list[i][j] += shares_list[i][j]
-#     return combined_shares_dict        
-
-# def flatten_masks(masks):
-#     return [mask for masks_row in masks for mask in masks_row]
-
-# def split_list_masks(masks, n):
-#     flat_masks = flatten_masks(masks)
-#     shares_list = [split_additive_secret(mask, n)]
-#     return masks_splits
+from utils import get_shape
 
 def split_additive_mask(mask, n, rand_low, rand_high):  # n*mask
     shares = [torch.randn(mask.shape) for _ in range(n - 1)]
     shares.append(mask - sum(shares))
     return shares
-
-# def transpose_list(input_list):
-#     return list(map(list, zip(*input_list)))
 
 def are_tensors_equal(tensor1, tensor2):
     # Check if both are tensors and use torch.equal
@@ -80,8 +32,6 @@ def are_tensors_equal(tensor1, tensor2):
 def split_additive_masks(masks, n, rand_low, rand_high):    # n*P*mask
     all_shares = [split_additive_mask(mask, n, rand_low, rand_high) for mask in masks]
     return all_shares
-
-from utils import get_shape
 
 def pairwise_add_splitted_masks(splitted_masks):
     print("pairwise_add_splitted_masks:     get_shape(splitted_masks)={}".format(get_shape(splitted_masks)))
@@ -107,20 +57,6 @@ def pairwise_sum(tensor_list1, tensor_list2):
         raise ValueError("The lists must have the same length.")
     
     return [add_tensors(t1, t2) for t1, t2 in zip(tensor_list1, tensor_list2)]
-
-# def reconstruct_additive_mask(shares):
-#     return sum(shares)
-
-# def reconstruct_additive_masks(split_shares):
-#     reconstructed_masks = []
-#     for mask_shares in split_shares:
-#         masks = []
-#         for shares in zip(*mask_shares):  # Iterating through shares of each tensor
-#             reconstructed_tensor = reconstruct_additive_mask(shares)
-#             masks.append(reconstructed_tensor)
-#         reconstructed_masks.append(masks)
-#     return reconstructed_masks
-
 
 def mask_model(seed, model, rand_low, rand_high):
     torch.manual_seed(seed)
