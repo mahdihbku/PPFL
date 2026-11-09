@@ -1,5 +1,9 @@
 .venv/
-.vscode/
-data/
+__pycache__/
+*.pyc
+.pytest_cache/
+tmp/
 .DS_Store
-PP-FL.code-workspace
+*.egg-info/
+data
+results/

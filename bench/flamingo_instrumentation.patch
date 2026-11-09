@@ -1,0 +1,166 @@
+diff --git a/agent/Agent.py b/agent/Agent.py
+index 48e86fe..840021b 100644
+--- a/agent/Agent.py
++++ b/agent/Agent.py
+@@ -146,6 +146,8 @@ class Agent:
+   ### It is possible this could change in the future.  Normal agents will
+   ### not typically wish to request additional delay.
+   def sendMessage (self, recipientID, msg, delay = 0, tag = "communication"):
++    from util import ppfl_stats  # PPFL comparison: byte counting (off unless FLAMINGO_COUNT_BYTES=1)
++    ppfl_stats.count(self.id, recipientID, msg.body)
+     self.kernel.sendMessage(self.id, recipientID, msg, delay = delay, tag = tag)
+ 
+   def setWakeup (self, requestedTime):
+diff --git a/agent/flamingo/SA_ClientAgent.py b/agent/flamingo/SA_ClientAgent.py
+index 2a46443..8004d68 100644
+--- a/agent/flamingo/SA_ClientAgent.py
++++ b/agent/flamingo/SA_ClientAgent.py
+@@ -137,6 +137,12 @@ class SA_ClientAgent(Agent):
+             self.elapsed_time['CROSSCHECK'] / self.no_of_iterations)
+         self.kernel.custom_state['clt_reconstruction'] += (
+             self.elapsed_time['RECONSTRUCTION'] / self.no_of_iterations)
++        from util import ppfl_stats  # PPFL comparison: per-agent rows
++        ppfl_stats.write_row({"role": "client", "id": self.id, "decryptor": int(self.id in self.user_committee),
++                              "num_clients": self.num_clients, "vector_len": self.vector_len,
++                              "iterations": self.no_of_iterations,
++                              **{k.lower() + "_s": v.total_seconds() / self.no_of_iterations
++                                 for k, v in self.elapsed_time.items()}})
+ 
+         super().kernelStopping()
+ 
+@@ -145,6 +151,7 @@ class SA_ClientAgent(Agent):
+         super().wakeup(currentTime)
+         dt_wake_start = pd.Timestamp('now')
+         self.sendVectors(currentTime)
++        self.recordTime(dt_wake_start, "REPORT")  # PPFL comparison: iteration 1 was not timed
+ 
+     def receiveMessage(self, currentTime, msg):
+         super().receiveMessage(currentTime, msg)
+diff --git a/agent/flamingo/SA_ServiceAgent.py b/agent/flamingo/SA_ServiceAgent.py
+index 9869713..b7b9458 100644
+--- a/agent/flamingo/SA_ServiceAgent.py
++++ b/agent/flamingo/SA_ServiceAgent.py
+@@ -178,6 +178,12 @@ class SA_ServiceAgent(Agent):
+             self.elapsed_time['CROSSCHECK'] / self.no_of_iterations)
+         self.kernel.custom_state['srv_reconstruction'] += (
+             self.elapsed_time['RECONSTRUCTION'] / self.no_of_iterations)
++        from util import ppfl_stats  # PPFL comparison: per-agent rows
++        ppfl_stats.write_row({"role": "server", "id": self.id, "decryptor": 0,
++                              "num_clients": self.num_clients, "vector_len": self.vector_len,
++                              "iterations": self.no_of_iterations,
++                              **{k.lower() + "_s": v.total_seconds() / self.no_of_iterations
++                                 for k, v in self.elapsed_time.items()}})
+ 
+         # Allow the base class to perform stopping activities.
+         super().kernelStopping()
+@@ -288,7 +294,7 @@ class SA_ServiceAgent(Agent):
+         self.current_round = 1
+ 
+         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
+-        self.setWakeup(currentTime + server_comp_delay + pd.Timedelta('2s'))
++        self.setWakeup(currentTime + server_comp_delay + param.wt_flamingo_first)  # PPFL comparison: was '2s'
+ 
+         # Accumulate into time log.
+         # self.recordTime(dt_protocol_start, "INIT")
+diff --git a/pki_files/setup_pki.py b/pki_files/setup_pki.py
+index 39f2093..fe58ba8 100644
+--- a/pki_files/setup_pki.py
++++ b/pki_files/setup_pki.py
+@@ -13,7 +13,8 @@ f.write(key.export_key(format='PEM'))
+ f.close()
+ 
+ # generate client keys
+-for i in range (512):
++import os
++for i in range (int(os.environ.get("FLAMINGO_NUM_KEYS", 512))):  # PPFL comparison: up to 2048 clients
+ 	key = ECC.generate(curve='P-256')
+ 	hdr = 'client'+str(i)+'.pem'
+ 	f = open(hdr, 'wt')
+diff --git a/util/param.py b/util/param.py
+index 276830a..5259e2b 100644
+--- a/util/param.py
++++ b/util/param.py
+@@ -3,9 +3,10 @@ from Cryptodome.Random import get_random_bytes
+ import numpy as np
+ import pandas as pd
+ import math
++import os
+ 
+ # System parameters
+-vector_len = 16000
++vector_len = int(os.environ.get('FLAMINGO_VECTOR_LEN', 16000))  # PPFL comparison: settable
+ vector_type = 'uint32'
+ committee_size = 60
+ fraction = 1/3
+@@ -13,9 +14,13 @@ fraction = 1/3
+ # Waiting time
+ # Set according to a target dropout rate (e.g., 1%) 
+ # and message lantecy (see model/LatencyModel.py)
+-wt_flamingo_report = pd.Timedelta('10s')
+-wt_flamingo_crosscheck = pd.Timedelta('3s')
+-wt_flamingo_reconstruction = pd.Timedelta('3s')
++# PPFL comparison: FLAMINGO_WAIT_S overrides all three (simulated time) so that every client and decryptor
++# answers in time (no-dropout setting, as for the other schemes); defaults unchanged.
++_w = os.environ.get('FLAMINGO_WAIT_S')
++wt_flamingo_report = pd.Timedelta(f'{_w}s' if _w else '10s')
++wt_flamingo_crosscheck = pd.Timedelta(f'{_w}s' if _w else '3s')
++wt_flamingo_reconstruction = pd.Timedelta(f'{_w}s' if _w else '3s')
++wt_flamingo_first = pd.Timedelta(f'{_w}s' if _w else '2s')  # was hard-coded in initFunc
+ 
+ wt_google_adkey = pd.Timedelta('10s')
+ wt_google_graph = pd.Timedelta('10s')
+diff --git a/util/ppfl_stats.py b/util/ppfl_stats.py
+new file mode 100644
+index 0000000..772f957
+--- /dev/null
++++ b/util/ppfl_stats.py
+@@ -0,0 +1,49 @@
++"""Measurement hooks added for the PPFL comparison (no protocol change).
++
++FLAMINGO_STATS_CSV: per-agent CPU-time rows written at kernel stop (their own step timers).
++FLAMINGO_COUNT_BYTES=1: serialized size of every message, measured as in the authors' debug
++logging (dill.dumps with EC points converted to (x, y) integers), accumulated per sender and
++per recipient. Byte counting adds work inside timed steps, so it is used in separate runs.
++"""
++
++import csv
++import os
++from collections import defaultdict
++
++import dill
++
++COUNT_BYTES = os.environ.get("FLAMINGO_COUNT_BYTES") == "1"
++SENT = defaultdict(int)
++RECV = defaultdict(int)
++
++
++def _plain(o):
++    if type(o).__name__ == "EccPoint":
++        return (int(o.x), int(o.y))
++    if isinstance(o, dict):
++        return {(_plain(k) if isinstance(k, tuple) else k): _plain(v) for k, v in o.items()}
++    if isinstance(o, (list, tuple)):
++        return type(o)(_plain(v) for v in o)
++    return o
++
++
++def count(sender, recipient, body):
++    if not COUNT_BYTES:
++        return
++    n = len(dill.dumps(_plain(body)))
++    SENT[sender] += n
++    RECV[recipient] += n
++
++
++def write_row(row):
++    path = os.environ.get("FLAMINGO_STATS_CSV")
++    if not path:
++        return
++    if COUNT_BYTES:
++        row = dict(row, bytes_sent=SENT[row["id"]], bytes_recv=RECV[row["id"]])
++    new = not os.path.exists(path)
++    with open(path, "a", newline="") as fh:
++        w = csv.DictWriter(fh, fieldnames=list(row))
++        if new:
++            w.writeheader()
++        w.writerow(row)
